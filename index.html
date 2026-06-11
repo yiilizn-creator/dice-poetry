@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="description" content="六个随机词，拼凑你的诗。" />
+    <meta name="theme-color" content="#FAF8F6" />
+    <meta property="og:title" content="骰子诗句" />
+    <meta property="og:description" content="六个随机词，拼凑你的诗。" />
+    <meta property="og:type" content="website" />
+    <title>骰子诗句</title>
+    <link rel="stylesheet" href="./css/styles.css?v=dice-poetry-1" />
+  </head>
+  <body>
+    <div class="ambient" aria-hidden="true"></div>
+    <div id="app">
+      <!-- 首页 -->
+      <section class="screen screen--active" data-screen="home">
+        <div class="screen-content home-content">
+          <div class="home-hero reveal">
+            <h1 class="hero-title">解锁想象力</h1>
+            <p class="hero-sub">六个随机词，拼凑你的诗</p>
+          </div>
+
+          <div class="home-dice reveal">
+            <div class="dice-cluster" id="home-dice-cluster" aria-hidden="true"></div>
+          </div>
+
+          <div class="home-actions reveal">
+            <button class="btn btn-primary btn-breathe" type="button" data-action="start-roll">开始投掷</button>
+            <p class="home-hint">解锁今日份朋友圈最佳开场白</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 投掷页 -->
+      <section class="screen" data-screen="roll">
+        <div class="screen-content roll-content">
+          <div class="dice-stage" id="roll-dice-stage"></div>
+        </div>
+      </section>
+
+      <!-- 结果页 -->
+      <section class="screen" data-screen="result">
+        <div class="screen-content result-content">
+          <h2 class="result-headline reveal">拖动骰子，释放你的浪漫脑洞</h2>
+
+          <div class="result-dice">
+            <div class="dice-row dice-row--draggable" id="result-dice-row"></div>
+          </div>
+
+          <div class="best-arrange-wrap">
+            <button class="btn btn-primary btn-best" type="button" data-action="best-arrange" id="best-arrange-btn">显示最佳✨</button>
+          </div>
+
+          <div class="poem-card result-poem-card" id="poem-card" hidden>
+            <p class="best-loading" id="best-loading" hidden>正在组合诗句…</p>
+            <div class="poem-body best-poem" id="best-poem"></div>
+            <p class="poem-signature" id="poem-signature"></p>
+          </div>
+
+          <div class="result-toolbar result-toolbar--ready" id="result-toolbar">
+            <button class="toolbar-btn" type="button" data-action="save-poster"><span class="toolbar-btn__icon" aria-hidden="true">↓</span>保存</button>
+            <button class="toolbar-btn" type="button" data-action="roll-again"><span class="toolbar-btn__icon" aria-hidden="true">↻</span>重投</button>
+            <button class="toolbar-btn" type="button" data-action="copy-share"><span class="toolbar-btn__icon" aria-hidden="true">⎘</span>分享</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 分享页 -->
+      <section class="screen" data-screen="share">
+        <div class="screen-content share-content">
+          <button class="share-back" type="button" data-action="back-result" aria-label="返回结果页">← 返回</button>
+          <div class="poster-preview" id="poster-preview">
+            <canvas id="poster-canvas"></canvas>
+          </div>
+          <p class="share-tagline">六个随机词，拼凑你的诗</p>
+          <div class="actions actions--share">
+            <button class="btn btn-primary btn-block" type="button" data-action="download-poster">保存诗卡</button>
+            <button class="btn btn-secondary btn-block" type="button" data-action="copy-share">复制分享</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <p class="toast" id="toast" hidden></p>
+
+    <script defer src="./js/app.bundle.js?v=dice-poetry-1"></script>
+  </body>
+</html>
