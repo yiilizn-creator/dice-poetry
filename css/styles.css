@@ -404,6 +404,7 @@ body {
   flex-shrink: 0;
   min-height: calc(var(--tile-size) * 2 + var(--tile-gap) + 40px);
   padding: 20px 0 28px;
+  touch-action: none;
 }
 
 .best-arrange-wrap {
@@ -576,6 +577,10 @@ body {
 
 .dice-tile--draggable {
   cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   transition: transform 200ms ease, opacity 200ms ease;
 }
 

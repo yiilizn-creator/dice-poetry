@@ -28,18 +28,42 @@ export function playGlassClink() {
   }
 }
 
-export function hapticRoll() {
+function playRollTap() {
   try {
-    navigator.vibrate?.(14);
+    const ac = getCtx();
+    const t = ac.currentTime;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.exponentialRampToValueAtTime(90, t + 0.08);
+    gain.gain.setValueAtTime(0.12, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(t);
+    osc.stop(t + 0.11);
   } catch {
     /* ignore */
   }
 }
 
-export function hapticLand() {
+function vibrate(pattern) {
   try {
-    navigator.vibrate?.(6);
+    if (typeof navigator.vibrate === "function") {
+      return navigator.vibrate(pattern);
+    }
   } catch {
     /* ignore */
   }
+  return false;
+}
+
+export function hapticRoll() {
+  const ok = vibrate([18, 36, 14]);
+  if (!ok) playRollTap();
+}
+
+export function hapticLand() {
+  vibrate(10);
 }
