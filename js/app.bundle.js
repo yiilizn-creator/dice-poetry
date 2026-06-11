@@ -199,9 +199,8 @@ function getShareCopy(bestPoem) {
 }
 
 /* === drag.js === */
-const LONG_PRESS_MS = 160;
-const MOVE_CANCEL_PX = 8;
-const DRAG_THRESHOLD = 4;
+const HOLD_MS = 120;
+const DRAG_START_PX = 10;
 
 function initDiceDrag(container, rolledItems, createItemEl, onChange) {
   let order = [...rolledItems];
@@ -213,6 +212,11 @@ function initDiceDrag(container, rolledItems, createItemEl, onChange) {
     return [...container.querySelectorAll(".dice-tile--draggable")];
   }
 
+  function tileFromTarget(target) {
+    const tile = target?.closest?.(".dice-tile--draggable");
+    return tile && container.contains(tile) ? tile : null;
+  }
+
   function cacheSlotRects() {
     return getTiles().map((el) => {
       const r = el.getBoundingClientRect();
@@ -222,8 +226,6 @@ function initDiceDrag(container, rolledItems, createItemEl, onChange) {
 
   function indexFromPoint(x, y, excludeEl) {
     const tiles = getTiles();
-    let hit = null;
-
     for (const tile of tiles) {
       if (tile === excludeEl) continue;
       const r = tile.getBoundingClientRect();
@@ -232,20 +234,18 @@ function initDiceDrag(container, rolledItems, createItemEl, onChange) {
       }
     }
 
+    let best = null;
     let bestDist = Infinity;
     for (const tile of tiles) {
       if (tile === excludeEl) continue;
       const r = tile.getBoundingClientRect();
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      const dist = Math.hypot(x - cx, y - cy);
+      const dist = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
       if (dist < bestDist) {
         bestDist = dist;
-        hit = Number(tile.dataset.index);
+        best = Number(tile.dataset.index);
       }
     }
-
-    return hit;
+    return best;
   }
 
   function buildPreviewOrder(fromIndex, hoverIndex) {
@@ -275,31 +275,29 @@ function initDiceDrag(container, rolledItems, createItemEl, onChange) {
 
       const ox = toRect.left - fromRect.left;
       const oy = toRect.top - fromRect.top;
-      if (ox === 0 && oy === 0) {
-        tile.style.transform = "";
-      } else {
-        tile.style.transform = `translate3d(${ox}px, ${oy}px, 0)`;
-      }
+      tile.style.transform = ox === 0 && oy === 0 ? "" : `translate3d(${ox}px, ${oy}px, 0)`;
     });
   }
 
   function clearAllTransforms() {
     getTiles().forEach((tile) => {
-      tile.classList.remove("dice-tile--dragging", "dice-tile--over", "dice-tile--shuffling");
+      tile.classList.remove("dice-tile--dragging", "dice-tile--shuffling");
       tile.style.transform = "";
       tile.style.zIndex = "";
       tile.style.willChange = "";
     });
   }
 
-  function cancelLongPress(drag) {
-    if (drag?.pressTimer) {
-      clearTimeout(drag.pressTimer);
-      drag.pressTimer = null;
+  function clearHoldTimer(drag) {
+    if (drag?.holdTimer) {
+      clearTimeout(drag.holdTimer);
+      drag.holdTimer = null;
     }
   }
 
   function startDragging(drag) {
+    if (drag.dragging) return;
+    clearHoldTimer(drag);
     drag.dragging = true;
     dragUsed = true;
     drag.slotRects = cacheSlotRects();
@@ -313,27 +311,37 @@ function initDiceDrag(container, rolledItems, createItemEl, onChange) {
     hapticLand();
   }
 
-  function scheduleFrame(drag, clientX, clientY) {
-    drag.pendingX = clientX;
-    drag.pendingY = clientY;
+  function maybeStartDrag(drag, clientX, clientY) {
+    if (drag.dragging) return true;
+    const dx = clientX - drag.startX;
+    const dy = clientY - drag.startY;
+    if (Math.hypot(dx, dy) >= DRAG_START_PX) {
+      startDragging(drag);
+      return true;
+    }
+    return false;
+  }
+
+  function scheduleFrame(clientX, clientY) {
+    if (!activeDrag?.dragging) return;
+    activeDrag.pendingX = clientX;
+    activeDrag.pendingY = clientY;
     if (rafId) return;
 
     rafId = requestAnimationFrame(() => {
       rafId = 0;
-      if (!activeDrag?.dragging) return;
+      const drag = activeDrag;
+      if (!drag?.dragging) return;
 
-      const dx = activeDrag.pendingX - activeDrag.startX;
-      const dy = activeDrag.pendingY - activeDrag.startY;
-      activeDrag.dx = dx;
-      activeDrag.dy = dy;
+      drag.dx = drag.pendingX - drag.startX;
+      drag.dy = drag.pendingY - drag.startY;
 
-      const nextHover = indexFromPoint(activeDrag.pendingX, activeDrag.pendingY, activeDrag.el);
-      if (nextHover !== null && nextHover !== activeDrag.hoverIndex) {
-        activeDrag.hoverIndex = nextHover;
+      const nextHover = indexFromPoint(drag.pendingX, drag.pendingY, drag.el);
+      if (nextHover !== null && nextHover !== drag.hoverIndex) {
+        drag.hoverIndex = nextHover;
         hapticLand();
       }
-
-      applyPreviewLayout(activeDrag);
+      applyPreviewLayout(drag);
     });
   }
 
@@ -341,7 +349,7 @@ function initDiceDrag(container, rolledItems, createItemEl, onChange) {
     const drag = activeDrag;
     if (!drag) return;
 
-    cancelLongPress(drag);
+    clearHoldTimer(drag);
     if (rafId) {
       cancelAnimationFrame(rafId);
       rafId = 0;
@@ -363,6 +371,7 @@ function initDiceDrag(container, rolledItems, createItemEl, onChange) {
 
     clearAllTransforms();
     activeDrag = null;
+    detachDocumentListeners();
 
     if (committed) {
       render();
@@ -372,80 +381,135 @@ function initDiceDrag(container, rolledItems, createItemEl, onChange) {
     }
   }
 
-  function bindTile(el, index) {
-    el.dataset.index = String(index);
-    el.classList.add("dice-tile--draggable");
+  function onDocumentMove(e) {
+    if (!activeDrag) return;
 
-    el.addEventListener("pointerdown", (e) => {
-      if (activeDrag) return;
-      if (e.pointerType === "mouse" && e.button !== 0) return;
+    let x;
+    let y;
 
-      activeDrag = {
-        el,
-        fromIndex: index,
-        pointerId: e.pointerId,
-        pointerType: e.pointerType,
-        startX: e.clientX,
-        startY: e.clientY,
-        pendingX: e.clientX,
-        pendingY: e.clientY,
-        dx: 0,
-        dy: 0,
-        dragging: false,
-        hoverIndex: index,
-        pressTimer: null,
-      };
+    if (e.type === "touchmove") {
+      const touch = [...e.changedTouches, ...e.touches].find((t) => t.identifier === activeDrag.touchId);
+      if (!touch) return;
+      x = touch.clientX;
+      y = touch.clientY;
+    } else {
+      if (activeDrag.pointerId !== e.pointerId) return;
+      x = e.clientX;
+      y = e.clientY;
+    }
 
-      if (e.pointerType === "touch") {
-        activeDrag.pressTimer = setTimeout(() => {
-          if (!activeDrag || activeDrag.el !== el) return;
-          startDragging(activeDrag);
-        }, LONG_PRESS_MS);
-      }
+    if (!activeDrag.dragging) {
+      maybeStartDrag(activeDrag, x, y);
+      if (!activeDrag.dragging) return;
+    }
 
-      try {
-        el.setPointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
-    });
+    e.preventDefault();
+    scheduleFrame(x, y);
+  }
 
-    el.addEventListener("pointermove", (e) => {
-      if (!activeDrag || activeDrag.pointerId !== e.pointerId) return;
+  function onDocumentEnd(e) {
+    if (!activeDrag) return;
 
-      const dx = e.clientX - activeDrag.startX;
-      const dy = e.clientY - activeDrag.startY;
+    let x = activeDrag.pendingX;
+    let y = activeDrag.pendingY;
 
-      if (!activeDrag.dragging) {
-        if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) cancelLongPress(activeDrag);
-        if (!activeDrag.pressTimer) return;
-        return;
-      }
+    if (e.type === "touchend" || e.type === "touchcancel") {
+      const touch = [...e.changedTouches].find((t) => t.identifier === activeDrag.touchId);
+      if (!touch) return;
+      x = touch.clientX;
+      y = touch.clientY;
+    } else if (activeDrag.pointerId === e.pointerId) {
+      x = e.clientX;
+      y = e.clientY;
+    } else {
+      return;
+    }
 
-      e.preventDefault();
-      scheduleFrame(activeDrag, e.clientX, e.clientY);
-    });
+    finishDrag(x, y);
+  }
 
-    el.addEventListener("pointerup", (e) => {
-      if (!activeDrag || activeDrag.pointerId !== e.pointerId) return;
-      finishDrag(e.clientX, e.clientY);
-    });
+  function attachDocumentListeners() {
+    document.addEventListener("touchmove", onDocumentMove, { passive: false });
+    document.addEventListener("touchend", onDocumentEnd, { passive: true });
+    document.addEventListener("touchcancel", onDocumentEnd, { passive: true });
+    document.addEventListener("pointermove", onDocumentMove);
+    document.addEventListener("pointerup", onDocumentEnd);
+    document.addEventListener("pointercancel", onDocumentEnd);
+  }
 
-    el.addEventListener("pointercancel", (e) => {
-      if (!activeDrag || activeDrag.pointerId !== e.pointerId) return;
-      finishDrag(e.clientX, e.clientY);
-    });
+  function detachDocumentListeners() {
+    document.removeEventListener("touchmove", onDocumentMove);
+    document.removeEventListener("touchend", onDocumentEnd);
+    document.removeEventListener("touchcancel", onDocumentEnd);
+    document.removeEventListener("pointermove", onDocumentMove);
+    document.removeEventListener("pointerup", onDocumentEnd);
+    document.removeEventListener("pointercancel", onDocumentEnd);
+  }
+
+  function beginDrag(tile, clientX, clientY, meta) {
+    if (activeDrag) return;
+
+    activeDrag = {
+      el: tile,
+      fromIndex: Number(tile.dataset.index),
+      startX: clientX,
+      startY: clientY,
+      pendingX: clientX,
+      pendingY: clientY,
+      dx: 0,
+      dy: 0,
+      dragging: false,
+      hoverIndex: Number(tile.dataset.index),
+      holdTimer: null,
+      ...meta,
+    };
+
+    attachDocumentListeners();
+
+    activeDrag.holdTimer = setTimeout(() => {
+      if (activeDrag?.el === tile) startDragging(activeDrag);
+    }, HOLD_MS);
+  }
+
+  function onContainerTouchStart(e) {
+    if (activeDrag) return;
+    const tile = tileFromTarget(e.target);
+    if (!tile) return;
+
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+
+    beginDrag(tile, touch.clientX, touch.clientY, { touchId: touch.identifier, isTouch: true });
+  }
+
+  function onContainerPointerDown(e) {
+    if (activeDrag || e.pointerType === "touch") return;
+    if (e.button !== 0) return;
+
+    const tile = tileFromTarget(e.target);
+    if (!tile) return;
+
+    beginDrag(tile, e.clientX, e.clientY, { pointerId: e.pointerId, isTouch: false });
+    try {
+      tile.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
   }
 
   function render() {
     container.innerHTML = "";
     order.forEach((item, index) => {
       const el = createItemEl(item);
+      el.dataset.index = String(index);
       el.dataset.word = item.word;
-      bindTile(el, index);
+      el.classList.add("dice-tile--draggable");
       container.appendChild(el);
     });
   }
+
+  container.addEventListener("touchstart", onContainerTouchStart, { passive: true });
+  container.addEventListener("pointerdown", onContainerPointerDown);
 
   render();
   onChange(order.map((i) => i.word), false);
@@ -498,17 +562,29 @@ function playRollTap() {
   try {
     const ac = getCtx();
     const t = ac.currentTime;
+
     const osc = ac.createOscillator();
     const gain = ac.createGain();
     osc.type = "triangle";
-    osc.frequency.setValueAtTime(180, t);
-    osc.frequency.exponentialRampToValueAtTime(90, t + 0.08);
-    gain.gain.setValueAtTime(0.12, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    osc.frequency.setValueAtTime(220, t);
+    osc.frequency.exponentialRampToValueAtTime(80, t + 0.1);
+    gain.gain.setValueAtTime(0.18, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
     osc.connect(gain);
     gain.connect(ac.destination);
     osc.start(t);
-    osc.stop(t + 0.11);
+    osc.stop(t + 0.13);
+
+    const osc2 = ac.createOscillator();
+    const gain2 = ac.createGain();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(60, t + 0.02);
+    gain2.gain.setValueAtTime(0.14, t + 0.02);
+    gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    osc2.connect(gain2);
+    gain2.connect(ac.destination);
+    osc2.start(t + 0.02);
+    osc2.stop(t + 0.11);
   } catch {
     /* ignore */
   }
@@ -526,12 +602,13 @@ function vibrate(pattern) {
 }
 
 function hapticRoll() {
-  const ok = vibrate([18, 36, 14]);
-  if (!ok) playRollTap();
+  vibrate([22, 40, 18, 55, 16]);
+  playRollTap();
 }
 
 function hapticLand() {
-  vibrate(10);
+  const ok = vibrate([12, 18, 10]);
+  if (!ok) playRollTap();
 }
 
 /* === poster.js === */

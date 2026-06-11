@@ -201,6 +201,8 @@ body {
   width: calc(var(--tile-size) * 3 + var(--tile-gap) * 2);
   max-width: 100%;
   justify-content: center;
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 /* ── 冰透玻璃骰子 ── */
@@ -251,6 +253,12 @@ body {
   z-index: 1;
 }
 
+.dice-tile__glow,
+.dice-tile__highlight,
+.dice-tile__refract {
+  pointer-events: none;
+}
+
 .dice-tile__highlight {
   position: absolute;
   top: 6%;
@@ -259,7 +267,6 @@ body {
   height: 16%;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 255, 255, 0.75) 0%, transparent 72%);
-  pointer-events: none;
   z-index: 1;
 }
 
@@ -271,11 +278,11 @@ body {
   height: 32%;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.42) 0%, transparent 68%);
   transform: skewX(-14deg);
-  pointer-events: none;
   z-index: 1;
 }
 
 .dice-tile__text {
+  pointer-events: none;
   position: relative;
   z-index: 4;
   font-size: var(--tile-font);

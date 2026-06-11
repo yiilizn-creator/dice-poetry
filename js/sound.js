@@ -32,17 +32,29 @@ function playRollTap() {
   try {
     const ac = getCtx();
     const t = ac.currentTime;
+
     const osc = ac.createOscillator();
     const gain = ac.createGain();
     osc.type = "triangle";
-    osc.frequency.setValueAtTime(180, t);
-    osc.frequency.exponentialRampToValueAtTime(90, t + 0.08);
-    gain.gain.setValueAtTime(0.12, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    osc.frequency.setValueAtTime(220, t);
+    osc.frequency.exponentialRampToValueAtTime(80, t + 0.1);
+    gain.gain.setValueAtTime(0.18, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
     osc.connect(gain);
     gain.connect(ac.destination);
     osc.start(t);
-    osc.stop(t + 0.11);
+    osc.stop(t + 0.13);
+
+    const osc2 = ac.createOscillator();
+    const gain2 = ac.createGain();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(60, t + 0.02);
+    gain2.gain.setValueAtTime(0.14, t + 0.02);
+    gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    osc2.connect(gain2);
+    gain2.connect(ac.destination);
+    osc2.start(t + 0.02);
+    osc2.stop(t + 0.11);
   } catch {
     /* ignore */
   }
@@ -60,10 +72,11 @@ function vibrate(pattern) {
 }
 
 export function hapticRoll() {
-  const ok = vibrate([18, 36, 14]);
-  if (!ok) playRollTap();
+  vibrate([22, 40, 18, 55, 16]);
+  playRollTap();
 }
 
 export function hapticLand() {
-  vibrate(10);
+  const ok = vibrate([12, 18, 10]);
+  if (!ok) playRollTap();
 }
